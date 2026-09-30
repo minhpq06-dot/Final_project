@@ -1,0 +1,13 @@
+export type Commitment = "high" | "medium" | "flexible";
+export type TeamStatus = "open" | "recruiting" | "full" | "closed";
+export type Profile = { id: string; full_name: string; university: string; major: string; bio: string; skills: string[]; desired_roles: string[]; commitment: Commitment; experience: string; portfolio_url: string };
+export type Competition = { id: string; title: string; organizer: string; category: string; description: string; deadline: string; min_team_size: number; max_team_size: number; location: string; information_url: string; accent: string };
+export type Team = { id: string; competition_id: string; captain_id: string; name: string; description: string; commitment: Commitment; status: TeamStatus; created_at: string };
+export type TeamRole = { id: string; team_id: string; name: string; skills: string[]; slots: number };
+export type Application = { id: string; team_id: string; role_id: string; applicant_id: string; message: string; status: "pending" | "accepted" | "rejected" | "withdrawn"; created_at: string };
+export type Member = { id: string; team_id: string; competition_id: string; user_id: string; role_id: string | null; role_name: string; joined_at: string };
+export type SavedItem = { id: string; user_id: string; team_id: string | null; competition_id: string | null };
+export type AppData = { profiles: Profile[]; competitions: Competition[]; teams: Team[]; team_roles: TeamRole[]; applications: Application[]; team_members: Member[]; saved_items: SavedItem[] };
+export type Bootstrap = { mode: "demo" | "supabase"; userId: string | null; data: AppData };
+export const commitmentLabels: Record<Commitment, string> = { high: "Chinh phục giải", medium: "Nghiêm túc học hỏi", flexible: "Linh hoạt" };
+export const statusLabels: Record<TeamStatus, string> = { open: "Mở đăng ký", recruiting: "Đang tuyển", full: "Đủ thành viên", closed: "Đã đóng" };
