@@ -1,1 +1,0 @@
--- Fictional demo records only. Production app may seed competitions through an admin workflow.

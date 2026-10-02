@@ -6,5 +6,211 @@ import { Shell } from "@/components/shell";
 import { Button, FadeIn, Field, inputClass } from "@/components/ui";
 import { Icon } from "@/components/icon";
 import type { Commitment } from "@/lib/types";
-export default function NewTeamPage() { const router = useRouter(); const { data, run, busy } = useApp(); const [competitionId, setCompetitionId] = useState(data.competitions[0]?.id || ""); const [name, setName] = useState(""); const [description, setDescription] = useState(""); const [commitment, setCommitment] = useState<Commitment>("high"); const [roles, setRoles] = useState([{ name: "Strategy", skills: "Research, Strategy", slots: 1 }]); const addRole = () => setRoles([...roles, { name: "", skills: "", slots: 1 }]); const updateRole = (index: number, key: "name" | "skills" | "slots", value: string | number) => setRoles(roles.map((role, i) => i === index ? { ...role, [key]: value } : role)); const removeRole = (index: number) => setRoles(roles.filter((_, i) => i !== index)); const submit = async (event: React.FormEvent) => { event.preventDefault(); const result = await run({ type: "create-team", competition_id: competitionId, name, description, commitment, roles: roles.map(r => ({ name: r.name, skills: r.skills.split(",").map(s => s.trim()).filter(Boolean), slots: Number(r.slots) })) }); if (result.ok && result.id) router.push(`/teams/${result.id}`); }; const c = data.competitions.find(x => x.id === competitionId); return <Shell><FadeIn><div className="max-w-[760px]"><p className="mb-3 text-[11px] font-bold uppercase tracking-[.2em] text-[#7557ff]">Tạo đội mới</p><h1 className="text-3xl font-semibold tracking-[-.06em]">Bắt đầu điều gì đó đáng nhớ</h1><p className="mt-2 text-sm text-stone-500">Mô tả rõ đội đang đi đâu. Người phù hợp sẽ tự tìm thấy bạn.</p><form onSubmit={submit} className="mt-8 space-y-5"><div className="rounded-2xl border border-stone-200 bg-white p-6"><Field label="Cuộc thi"><select required value={competitionId} onChange={e => setCompetitionId(e.target.value)} className={inputClass}>{data.competitions.map(x => <option key={x.id} value={x.id}>{x.title} · hạn {new Date(x.deadline).toLocaleDateString("vi-VN")}</option>)}</select></Field><div className="mt-5 grid gap-5 sm:grid-cols-2"><Field label="Tên đội"><input required minLength={2} maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Northstar" className={inputClass} /></Field><Field label="Mức độ cam kết"><select value={commitment} onChange={e => setCommitment(e.target.value as Commitment)} className={inputClass}><option value="high">Chinh phục giải</option><option value="medium">Nghiêm túc học hỏi</option><option value="flexible">Linh hoạt</option></select></Field></div><div className="mt-5"><Field label="Mục tiêu và cách đội làm việc"><textarea required minLength={20} maxLength={2000} value={description} onChange={e => setDescription(e.target.value)} placeholder="Đội muốn giải quyết điều gì? Tìm teammate có tinh thần ra sao?" rows={5} className={inputClass} /><p className="mt-2 text-[10px] text-stone-400">{description.length}/2000</p></Field></div></div><div className="rounded-2xl border border-stone-200 bg-white p-6"><div className="flex items-start justify-between"><div><h2 className="text-base font-semibold">Vai trò cần tuyển</h2><p className="mt-1 text-xs text-stone-400">Cuộc thi này cho phép {c?.min_team_size}–{c?.max_team_size} thành viên.</p></div><Button type="button" variant="secondary" onClick={addRole}><Icon name="plus" size={14} />Thêm vai trò</Button></div><div className="mt-5 space-y-3">{roles.map((role, i) => <div key={i} className="grid gap-3 rounded-xl bg-stone-50 p-3 sm:grid-cols-[1fr_1.4fr_80px_32px]"><input required value={role.name} onChange={e => updateRole(i, "name", e.target.value)} placeholder="Vai trò" className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none" /><input required value={role.skills} onChange={e => updateRole(i, "skills", e.target.value)} placeholder="Kỹ năng, cách nhau bằng dấu phẩy" className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none" /><input required min={1} max={9} type="number" value={role.slots} onChange={e => updateRole(i, "slots", Number(e.target.value))} className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none" aria-label="Số chỗ" />{roles.length > 1 ? <button type="button" onClick={() => removeRole(i)} className="flex items-center justify-center text-stone-400 hover:text-red-500" aria-label="Xóa vai trò"><Icon name="x" size={16} /></button> : <span />}</div>)}</div></div><div className="flex justify-end gap-3"><Button href="/teams" variant="secondary">Hủy</Button><Button type="submit" disabled={busy || !competitionId || name.trim().length < 2 || description.trim().length < 20}>Tạo đội <Icon name="arrowUpRight" size={14} /></Button></div></form></div></FadeIn></Shell>; }
-
+export default function NewTeamPage() {
+  const router = useRouter();
+  const { data, run, busy } = useApp();
+  const [competitionId, setCompetitionId] = useState(
+    data.competitions[0]?.id || "",
+  );
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [commitment, setCommitment] = useState<Commitment>("high");
+  const [roles, setRoles] = useState([
+    {
+      name: "Strategy",
+      skills: "Research, Strategy",
+      slots: Math.max(1, (data.competitions[0]?.min_team_size ?? 2) - 1),
+    },
+  ]);
+  const addRole = () =>
+    setRoles([...roles, { name: "", skills: "", slots: 1 }]);
+  const updateRole = (
+    index: number,
+    key: "name" | "skills" | "slots",
+    value: string | number,
+  ) =>
+    setRoles(
+      roles.map((role, i) => (i === index ? { ...role, [key]: value } : role)),
+    );
+  const removeRole = (index: number) =>
+    setRoles(roles.filter((_, i) => i !== index));
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const result = await run({
+      type: "create-team",
+      competition_id: competitionId,
+      name,
+      description,
+      commitment,
+      roles: roles.map((r) => ({
+        name: r.name,
+        skills: r.skills
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        slots: Number(r.slots),
+      })),
+    });
+    if (result.ok) router.push("/teams");
+  };
+  const c = data.competitions.find((x) => x.id === competitionId);
+  return (
+    <Shell>
+      <FadeIn>
+        <div className="max-w-[760px]">
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-[.2em] text-[#7557ff]">
+            Tạo đội mới
+          </p>
+          <h1 className="text-3xl font-semibold tracking-[-.06em]">
+            Bắt đầu điều gì đó đáng nhớ
+          </h1>
+          <p className="mt-2 text-sm text-stone-500">
+            Mô tả rõ đội đang đi đâu. Người phù hợp sẽ tự tìm thấy bạn.
+          </p>
+          <form onSubmit={submit} className="mt-8 space-y-5">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6">
+              <Field label="Cuộc thi">
+                <select
+                  required
+                  value={competitionId}
+                  onChange={(e) => setCompetitionId(e.target.value)}
+                  className={inputClass}
+                >
+                  {data.competitions.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.title} · hạn{" "}
+                      {new Date(x.deadline).toLocaleDateString("vi-VN")}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <Field label="Tên đội">
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={80}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ví dụ: Northstar"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Mức độ cam kết">
+                  <select
+                    value={commitment}
+                    onChange={(e) =>
+                      setCommitment(e.target.value as Commitment)
+                    }
+                    className={inputClass}
+                  >
+                    <option value="high">Chinh phục giải</option>
+                    <option value="medium">Nghiêm túc học hỏi</option>
+                    <option value="flexible">Linh hoạt</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="mt-5">
+                <Field label="Mục tiêu và cách đội làm việc">
+                  <textarea
+                    required
+                    minLength={20}
+                    maxLength={2000}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Đội muốn giải quyết điều gì? Tìm teammate có tinh thần ra sao?"
+                    rows={5}
+                    className={inputClass}
+                  />
+                  <p className="mt-2 text-[10px] text-stone-400">
+                    {description.length}/2000
+                  </p>
+                </Field>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-base font-semibold">Vai trò cần tuyển</h2>
+                  <p className="mt-1 text-xs text-stone-400">
+                    Cuộc thi này cho phép {c?.min_team_size}–{c?.max_team_size}{" "}
+                    thành viên.
+                  </p>
+                </div>
+                <Button type="button" variant="secondary" onClick={addRole}>
+                  <Icon name="plus" size={14} />
+                  Thêm vai trò
+                </Button>
+              </div>
+              <div className="mt-5 space-y-3">
+                {roles.map((role, i) => (
+                  <div
+                    key={i}
+                    className="grid gap-3 rounded-xl bg-stone-50 p-3 sm:grid-cols-[1fr_1.4fr_80px_32px]"
+                  >
+                    <input
+                      required
+                      value={role.name}
+                      aria-label={`Vai trò ${i + 1}`}
+                      onChange={(e) => updateRole(i, "name", e.target.value)}
+                      placeholder="Vai trò"
+                      className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none"
+                    />
+                    <input
+                      required
+                      value={role.skills}
+                      aria-label={`Kỹ năng vai trò ${i + 1}`}
+                      onChange={(e) => updateRole(i, "skills", e.target.value)}
+                      placeholder="Kỹ năng, cách nhau bằng dấu phẩy"
+                      className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none"
+                    />
+                    <input
+                      required
+                      min={1}
+                      max={9}
+                      type="number"
+                      value={role.slots}
+                      onChange={(e) =>
+                        updateRole(i, "slots", Number(e.target.value))
+                      }
+                      className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs outline-none"
+                      aria-label="Số chỗ"
+                    />
+                    {roles.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removeRole(i)}
+                        className="flex items-center justify-center text-stone-400 hover:text-red-500"
+                        aria-label="Xóa vai trò"
+                      >
+                        <Icon name="x" size={16} />
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button href="/teams" variant="secondary">
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  busy ||
+                  !competitionId ||
+                  name.trim().length < 2 ||
+                  description.trim().length < 20
+                }
+              >
+                Tạo đội <Icon name="arrowUpRight" size={14} />
+              </Button>
+            </div>
+          </form>
+        </div>
+      </FadeIn>
+    </Shell>
+  );
+}

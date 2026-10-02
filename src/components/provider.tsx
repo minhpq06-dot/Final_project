@@ -1,85 +1,177 @@
 "use client";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { z } from "zod";
+import { usePathname, useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { AppData, Bootstrap } from "@/lib/types";
-import { commandSchema, type Command } from "@/lib/validation";
-import { applyDemo } from "@/lib/domain";
-import { initialDemo, demoId } from "@/lib/demo";
-import { mutate } from "@/app/actions";
-import { createClient } from "@/lib/supabase/client";
-const storageKey = "casematch-demo-v2";
-const entrySchema = z.object({ userId: z.string().uuid(), command: commandSchema, now: z.number().finite(), ids: z.array(z.string().uuid()).max(20) });
-const storedSchema = z.object({ version: z.literal(1), userId: z.string().uuid().nullable(), entries: z.array(entrySchema).max(2000) });
-type Stored = z.infer<typeof storedSchema>;
-type Store = Bootstrap & { ready: boolean; busy: boolean; run: (cmd: Command) => Promise<{ ok: boolean; id?: string }>; switchUser: (id: string | null) => void; logout: () => Promise<void> };
+import { ZodError } from "zod";
+import type { AppData, LocalState } from "@/lib/types";
+import type { Command } from "@/lib/validation";
+import { applyCommand } from "@/lib/domain";
+import {
+  loadState,
+  readState,
+  saveState,
+  signIn,
+  storageKey,
+} from "@/lib/storage";
+
+type Result = { ok: boolean; id?: string; error?: string };
+type Store = {
+  data: AppData;
+  userId: string | null;
+  busy: boolean;
+  run: (cmd: Command) => Promise<Result>;
+  login: (email: string, name?: string) => Promise<Result>;
+  logout: () => Promise<void>;
+};
 const Context = createContext<Store | null>(null);
-export function AppProvider({ initial, children }: { initial: Bootstrap; children: React.ReactNode }) {
-  const [data, setData] = useState<AppData>(initial.data);
-  const [userId, setUserId] = useState(initial.userId);
-  const [ready, setReady] = useState(initial.mode !== "demo");
+function errorMessage(error: unknown) {
+  if (error instanceof ZodError) return error.issues[0].message;
+  if (error instanceof DOMException)
+    return "Không lưu được dữ liệu. Kiểm tra quyền lưu trữ và dung lượng trình duyệt.";
+  return error instanceof Error ? error.message : "Không lưu được thay đổi.";
+}
+
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<LocalState | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const journal = useRef<Stored>({ version: 1, userId: demoId(1), entries: [] });
   const locked = useRef(false);
   const router = useRouter();
+  const path = usePathname();
+
   useEffect(() => {
-    if (initial.mode !== "demo") return;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = storedSchema.parse(JSON.parse(raw));
-        let loaded = initialDemo();
-        for (const entry of parsed.entries) {
-          let cursor = 0;
-          loaded = applyDemo(loaded, entry.userId, entry.command, entry.now, () => {
-            const id = entry.ids[cursor++];
-            if (!id) throw new Error("Bản lưu thiếu ID.");
-            return id;
-          }).data;
-        }
-        if (parsed.userId && !loaded.profiles.some(p => p.id === parsed.userId)) throw new Error("Tài khoản không hợp lệ");
-        journal.current = parsed;
-        // External localStorage snapshot is loaded only after hydration.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setData(loaded); setUserId(parsed.userId);
+    const load = () => {
+      try {
+        setState(loadState(localStorage));
+      } catch {
+        setStorageError(
+          "Không đọc được bản lưu. Dữ liệu hiện có được giữ nguyên. Kiểm tra quyền lưu trữ hoặc phục hồi bản lưu trước khi tải lại.",
+        );
       }
-    } catch { toast.error("Không đọc được bản lưu demo. Bản gốc chưa bị ghi đè; các thay đổi mới sẽ thay thế bản lỗi."); }
-    setReady(true);
-  }, [initial.mode]);
-  const switchUser = (id: string | null) => {
-    if (initial.mode !== "demo" || !ready || busy || (id && !data.profiles.some(p => p.id === id))) return;
-    try { const next = { ...journal.current, userId: id }; localStorage.setItem(storageKey, JSON.stringify(next)); journal.current = next; setUserId(id); }
-    catch { toast.error("Không lưu được phiên demo. Kiểm tra quyền lưu trữ của trình duyệt."); }
+    };
+    // Hydrate browser storage after the server/client loading placeholder matches.
+    load();
+    const sync = (event: StorageEvent) => {
+      if (
+        event.storageArea !== localStorage ||
+        (event.key !== storageKey && event.key !== null)
+      )
+        return;
+      try {
+        setState(readState(localStorage));
+        setStorageError(null);
+      } catch {
+        setStorageError(
+          "Bản lưu đã bị xóa hoặc thay đổi không hợp lệ ở tab khác. Tải lại sau khi kiểm tra dữ liệu.",
+        );
+      }
+    };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
+
+  useEffect(() => {
+    if (state && !state.session && path !== "/login") router.replace("/login");
+    if (state?.session && path === "/login") router.replace("/");
+  }, [state, path, router]);
+
+  const update = async (
+    change: (current: LocalState) => { state: LocalState; id?: string },
+  ): Promise<Result> => {
+    if (!state || storageError || locked.current) return { ok: false };
+    locked.current = true;
+    setBusy(true);
+    try {
+      const commit = () => {
+        const result = change(readState(localStorage));
+        const saved = saveState(localStorage, result.state);
+        setState(saved);
+        return { ok: true, id: result.id };
+      };
+      // ponytail: LocalStorage is scoped to one origin/device; server storage is needed for shared accounts.
+      return navigator.locks
+        ? await navigator.locks.request(storageKey, commit)
+        : commit();
+    } catch (error) {
+      const message = errorMessage(error);
+      toast.error(message);
+      return { ok: false, error: message };
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
   };
   const run = async (command: Command) => {
-    if (locked.current || !ready) return { ok: false };
-    const parsed = commandSchema.safeParse(command);
-    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return { ok: false }; }
-    if (!userId) { toast.error("Đăng nhập để tiếp tục."); router.push("/login"); return { ok: false }; }
-    locked.current = true; setBusy(true);
-    try {
-      if (initial.mode === "demo") {
-        if (journal.current.entries.length >= 2000) throw new Error("Demo đạt giới hạn 2.000 thao tác. Dùng Supabase cho dữ liệu lâu dài.");
-        const now = Date.now();
-        const ids: string[] = [];
-        const result = applyDemo(data, userId, parsed.data, now, () => { const id = crypto.randomUUID(); ids.push(id); return id; });
-        // ponytail: demo persists replayable commands in one browser; Supabase provides cross-device persistence.
-        const entry = { userId, command: parsed.data, now, ids };
-        const next = { ...journal.current, entries: [...journal.current.entries, entry] };
-        localStorage.setItem(storageKey, JSON.stringify(next)); journal.current = next;
-        setData(result.data); toast.success("Đã lưu trên trình duyệt demo."); return { ok: true, id: result.id };
-      }
-      const result = await mutate(parsed.data);
-      if (!result.ok) { toast.error(result.error); return { ok: false }; }
-      setData(result.data); toast.success("Đã lưu thay đổi."); return { ok: true, id: result.id };
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Không lưu được thay đổi."); return { ok: false }; }
-    finally { locked.current = false; setBusy(false); }
+    const result = await update((current) => {
+      if (!current.session || current.session.userId !== state?.session?.userId)
+        throw new Error(
+          "Phiên đăng nhập đã đổi. Tải lại trang trước khi tiếp tục.",
+        );
+      const changed = applyCommand(
+        current.data,
+        current.session.userId,
+        command,
+      );
+      return { state: { ...current, data: changed.data }, id: changed.id };
+    });
+    if (result.ok) toast.success("Đã lưu thay đổi.");
+    return result;
   };
+  const login = (email: string, name?: string) =>
+    update((current) => ({ state: signIn(current, email, name) }));
   const logout = async () => {
-    if (initial.mode === "demo") switchUser(null);
-    else { const { error } = await createClient().auth.signOut(); if (error) { toast.error("Đăng xuất thất bại. Thử lại."); return; } router.replace("/login"); router.refresh(); }
+    const result = await update((current) => ({
+      state: { ...current, session: null },
+    }));
+    if (result.ok) router.replace("/login");
   };
-  return <Context.Provider value={{ mode: initial.mode, userId, data, ready, busy, run, switchUser, logout }}>{children}</Context.Provider>;
+
+  if (storageError)
+    return (
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <div role="alert" className="max-w-md space-y-4">
+          <h1 className="text-xl font-semibold">Không thể mở dữ liệu</h1>
+          <p>{storageError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg bg-stone-900 px-4 py-2 text-white"
+          >
+            Tải lại
+          </button>
+        </div>
+      </main>
+    );
+  if (!state || (!state.session && path !== "/login"))
+    return (
+      <main
+        className="flex min-h-screen items-center justify-center gap-3"
+        role="status"
+      >
+        <LoaderCircle
+          aria-hidden="true"
+          className="size-5 animate-spin text-[#7557ff]"
+        />
+        <span className="text-sm text-stone-600">Đang mở CaseMatch...</span>
+      </main>
+    );
+  return (
+    <Context.Provider
+      value={{
+        data: state.data,
+        userId: state.session?.userId ?? null,
+        busy,
+        run,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </Context.Provider>
+  );
 }
-export function useApp() { const context = useContext(Context); if (!context) throw new Error("AppProvider missing"); return context; }
+export function useApp() {
+  const context = useContext(Context);
+  if (!context) throw new Error("AppProvider missing");
+  return context;
+}

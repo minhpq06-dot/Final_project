@@ -1,16 +1,40 @@
 # CaseMatch
 
-Premium team matching workspace for case competitions.
+Next.js workspace with full-client LocalStorage persistence.
 
-## Run locally
+## Run
 
 ```powershell
-npm install
-Copy-Item .env.example .env.local
+npm ci
 npm run dev
 ```
 
-Default mode is `demo`: fictional data, no external credentials, and local UI flows. Set `NEXT_PUBLIC_DATA_MODE=supabase` only after applying `supabase/migrations/0001_casematch.sql` and filling `.env.local` with Supabase URL and publishable key.
+No database, environment variables, or remote authentication service required.
+
+## Persistence
+
+`casematch-state-v1` stores one validated JSON snapshot: profiles, competitions,
+teams, roles, applications, rosters, saved items, account identities and session.
+Defaults initialize only when no saved snapshot or compatible earlier save exists.
+Existing journals migrate once, keeping generated IDs and preserving earlier saves.
+Corrupt data is not overwritten. Storage errors stop the mutation and show an error;
+the UI reports success only after the snapshot is written.
+Tabs synchronize via storage events; Web Locks serialize updates where supported.
+
+Login waits one second, selects the account by normalized email, creates a profile
+for a new address, and persists the session before navigating. Sign out removes
+the session, not account data. Existing local identities use `linh@example.com`,
+`anh@example.com`, `ha@example.com`, and `huy@example.com`.
+
+**Security:** Local email identity is not verified authentication. Anyone with
+browser access can select an account or edit its stored data. Passwords and tokens
+are not collected or stored. Do not use this design for sensitive data or shared
+production accounts; those require server-side authentication and authorization.
+
+LocalStorage belongs to an origin (protocol, host, port) and browser profile.
+Changing port/domain/device uses a different store. Clearing site data removes it;
+private browsing may remove it after the last private window closes.
+Seed competitions are practice case briefs, not verified public listings.
 
 ## Checks
 
@@ -21,26 +45,13 @@ npm test
 npm run build
 ```
 
-## Supabase
+## Deploy
 
-1. Create Supabase project.
-2. Run migration in SQL Editor.
-3. Enable email/password Auth.
-4. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-5. Set Supabase Auth Site URL to deployed URL and add `/auth/callback` redirect.
-6. Switch `NEXT_PUBLIC_DATA_MODE=supabase`.
-
-Never add service-role key to browser or `.env.local` committed to Git.
-
-## Vercel
+Deploy as a standard Next.js project. No environment configuration required:
 
 ```powershell
 npx vercel login
-npx vercel --yes
-npx vercel env add NEXT_PUBLIC_SUPABASE_URL production
-npx vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY production
-npx vercel env add NEXT_PUBLIC_DATA_MODE production
 npx vercel --prod
 ```
 
-Deploy URL comes from Vercel command output. Verify Auth redirect and one complete apply/accept flow after deployment.
+Each visitor's data stays in their browser; deployment does not create a shared DB.

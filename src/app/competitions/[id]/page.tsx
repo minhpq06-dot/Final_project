@@ -3,7 +3,130 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useApp } from "@/components/provider";
 import { Shell } from "@/components/shell";
-import { Button, FadeIn, Pill } from "@/components/ui";
+import { Button, FadeIn } from "@/components/ui";
 import { Icon } from "@/components/icon";
 import { formatDeadline } from "@/lib/presentation";
-export default function CompetitionPage() { const { id } = useParams<{ id: string }>(); const { data } = useApp(); const c = data.competitions.find(x => x.id === id); if (!c) return <Shell><div className="py-20 text-center">Không tìm thấy cuộc thi.</div></Shell>; const related = data.teams.filter(t => t.competition_id === c.id); return <Shell><FadeIn><Link href="/" className="text-xs font-semibold text-stone-400">← Về trang chủ</Link><div className="mt-8 grid gap-6 xl:grid-cols-[1fr_360px]"><section><div className={`relative min-h-[270px] overflow-hidden rounded-[24px] p-8 ${c.accent === "peach" ? "bg-[#ffcfbd]" : c.accent === "sage" ? "bg-[#c8e4d0]" : c.accent === "blue" ? "bg-[#c7e1ef]" : "bg-[#d4cffb]"}`}><span className="relative z-10 rounded-full bg-white/60 px-3 py-1 text-[10px] font-bold uppercase tracking-[.15em]">{c.category}</span><h1 className="relative z-10 mt-12 max-w-[560px] text-4xl font-semibold tracking-[-.07em] sm:text-5xl">{c.title}</h1><div className="absolute -bottom-24 -right-10 h-64 w-64 rounded-full border-[22px] border-black/10" /></div><div className="mt-8 flex items-end justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-stone-400">Thông tin thử thách</p><h2 className="mt-2 text-xl font-semibold tracking-[-.04em]">Tạo điều đáng tự hào</h2></div><span className="text-xs text-stone-400">Hạn {formatDeadline(c.deadline)}</span></div><p className="mt-5 max-w-[720px] text-sm leading-7 text-stone-600">{c.description}</p><div className="mt-8 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-stone-200 bg-white p-4"><p className="text-[10px] uppercase tracking-[.15em] text-stone-400">Ban tổ chức</p><p className="mt-2 text-sm font-semibold">{c.organizer}</p></div><div className="rounded-2xl border border-stone-200 bg-white p-4"><p className="text-[10px] uppercase tracking-[.15em] text-stone-400">Quy mô đội</p><p className="mt-2 text-sm font-semibold">{c.min_team_size}–{c.max_team_size} người</p></div><div className="rounded-2xl border border-stone-200 bg-white p-4"><p className="text-[10px] uppercase tracking-[.15em] text-stone-400">Hình thức</p><p className="mt-2 text-sm font-semibold">{c.location}</p></div></div><h2 className="mt-10 text-xl font-semibold tracking-[-.04em]">Đội đang tuyển</h2><div className="mt-4 space-y-3">{related.map(t => <Link href={`/teams/${t.id}`} key={t.id} className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-4 hover:border-[#c7bfff]"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffcfbd] text-xs font-bold">{t.name.slice(0,2).toUpperCase()}</div><div><p className="text-sm font-semibold">{t.name}</p><p className="mt-1 text-[10px] text-stone-400">{t.description.slice(0, 72)}…</p></div></div><Icon name="arrowUpRight" size={16} /></Link>)}</div></section><aside><div className="sticky top-24 rounded-2xl border border-stone-200 bg-white p-6"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-stone-400">Sẵn sàng tham gia?</p><h2 className="mt-3 text-2xl font-semibold tracking-[-.05em]">Tìm đồng đội hợp gu.</h2><p className="mt-3 text-xs leading-5 text-stone-500">Khám phá các đội đang tuyển cho {c.title}, hoặc bắt đầu đội của riêng bạn.</p><div className="mt-6 grid gap-2"><Button href={`/teams?competition=${c.id}`}>Tìm đội phù hợp <Icon name="arrowUpRight" size={14} /></Button><Button href={`/teams/new?competition=${c.id}`} variant="secondary">Tạo đội mới</Button></div></div></aside></div></FadeIn></Shell>; }
+export default function CompetitionPage() {
+  const { id } = useParams<{ id: string }>();
+  const { data } = useApp();
+  const c = data.competitions.find((x) => x.id === id);
+  if (!c)
+    return (
+      <Shell>
+        <div className="py-20 text-center">Không tìm thấy cuộc thi.</div>
+      </Shell>
+    );
+  const related = data.teams.filter((t) => t.competition_id === c.id);
+  return (
+    <Shell>
+      <FadeIn>
+        <Link href="/" className="text-xs font-semibold text-stone-400">
+          ← Về trang chủ
+        </Link>
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_360px]">
+          <section>
+            <div
+              className={`relative min-h-[270px] overflow-hidden rounded-[24px] p-8 ${c.accent === "peach" ? "bg-[#ffcfbd]" : c.accent === "sage" ? "bg-[#c8e4d0]" : c.accent === "blue" ? "bg-[#c7e1ef]" : "bg-[#d4cffb]"}`}
+            >
+              <span className="relative z-10 rounded-full bg-white/60 px-3 py-1 text-[10px] font-bold uppercase tracking-[.15em]">
+                {c.category}
+              </span>
+              <h1 className="relative z-10 mt-12 max-w-[560px] text-4xl font-semibold tracking-[-.07em] sm:text-5xl">
+                {c.title}
+              </h1>
+              <div className="absolute -bottom-24 -right-10 h-64 w-64 rounded-full border-[22px] border-black/10" />
+            </div>
+            <div className="mt-8 flex items-end justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[.18em] text-stone-400">
+                  Thông tin thử thách
+                </p>
+                <h2 className="mt-2 text-xl font-semibold tracking-[-.04em]">
+                  Tạo điều đáng tự hào
+                </h2>
+              </div>
+              <span className="text-xs text-stone-400">
+                Hạn {formatDeadline(c.deadline)}
+              </span>
+            </div>
+            <p className="mt-5 max-w-[720px] text-sm leading-7 text-stone-600">
+              {c.description}
+            </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-stone-200 bg-white p-4">
+                <p className="text-[10px] uppercase tracking-[.15em] text-stone-400">
+                  Ban tổ chức
+                </p>
+                <p className="mt-2 text-sm font-semibold">{c.organizer}</p>
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-white p-4">
+                <p className="text-[10px] uppercase tracking-[.15em] text-stone-400">
+                  Quy mô đội
+                </p>
+                <p className="mt-2 text-sm font-semibold">
+                  {c.min_team_size}–{c.max_team_size} người
+                </p>
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-white p-4">
+                <p className="text-[10px] uppercase tracking-[.15em] text-stone-400">
+                  Hình thức
+                </p>
+                <p className="mt-2 text-sm font-semibold">{c.location}</p>
+              </div>
+            </div>
+            <h2 className="mt-10 text-xl font-semibold tracking-[-.04em]">
+              Đội đang tuyển
+            </h2>
+            <div className="mt-4 space-y-3">
+              {related.map((t) => (
+                <Link
+                  href={`/teams/${t.id}`}
+                  key={t.id}
+                  className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-4 hover:border-[#c7bfff]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffcfbd] text-xs font-bold">
+                      {t.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{t.name}</p>
+                      <p className="mt-1 text-[10px] text-stone-400">
+                        {t.description.slice(0, 72)}…
+                      </p>
+                    </div>
+                  </div>
+                  <Icon name="arrowUpRight" size={16} />
+                </Link>
+              ))}
+            </div>
+          </section>
+          <aside>
+            <div className="sticky top-24 rounded-2xl border border-stone-200 bg-white p-6">
+              <p className="text-[10px] font-bold uppercase tracking-[.18em] text-stone-400">
+                Sẵn sàng tham gia?
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-.05em]">
+                Tìm đồng đội hợp gu.
+              </h2>
+              <p className="mt-3 text-xs leading-5 text-stone-500">
+                Khám phá các đội đang tuyển cho {c.title}, hoặc bắt đầu đội của
+                riêng bạn.
+              </p>
+              <div className="mt-6 grid gap-2">
+                <Button href={`/teams?competition=${c.id}`}>
+                  Tìm đội phù hợp <Icon name="arrowUpRight" size={14} />
+                </Button>
+                <Button
+                  href={`/teams/new?competition=${c.id}`}
+                  variant="secondary"
+                >
+                  Tạo đội mới
+                </Button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </FadeIn>
+    </Shell>
+  );
+}
